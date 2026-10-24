@@ -1,0 +1,738 @@
+'use client'
+
+import { useCallback, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
+import { useParams, useRouter } from 'next/navigation'
+import {
+  ArrowLeft,
+  BadgeCheck,
+  ChevronDown,
+  ChevronUp,
+  CircleDashed,
+  Copy,
+  ExternalLink,
+  Eye,
+  Globe,
+  Link2,
+  Loader2,
+  Plus,
+  QrCode,
+  Save,
+  Trash2,
+  TriangleAlert,
+} from 'lucide-react'
+import { SiteHeader } from '@/components/site-header'
+import { SiteFooter } from '@/components/site-footer'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { useToast } from '@/hooks/use-toast'
+
+interface MenuData {
+  id: string
+  name: string
+  slug: string
+  published: boolean
+  publishedAt: string | null
+  accentColor: string
+  currency: string
+  footerNote: string | null
+  updatedAt: string
+  items: {
+    id: string
+    category: string
+    name: string
+    description: string | null
+    price: number | null
+    sortOrder: number
+  }[]
+}
+
+interface EditorItem {
+  key: string
+  category: string
+  name: string
+  description: string
+  price: string
+}
+
+const ACCENT_PRESETS: { name: string; value: string }[] = [
+  { name: 'Orange zesté', value: '#ea580c' },
+  { name: 'Framboise', value: '#e11d48' },
+  { name: 'Vert basilic', value: '#16a34a' },
+  { name: 'Sarcelle', value: '#0d9488' },
+  { name: 'Violet', value: '#9333ea' },
+  { name: 'Rouge tomate', value: '#dc2626' },
+]
+
+function parsePrice(raw: string): number | null {
+  const cleaned = raw.trim().replace(',', '.')
+  if (!cleaned) return null
+  const value = Number.parseFloat(cleaned)
+  if (!Number.isFinite(value) || value < 0) return null
+  return Math.round(value * 100) / 100
+}
+
+function priceToInput(price: number | null): string {
+  return price === null ? '' : price.toFixed(2).replace('.', ',')
+}
+
+export default function MenuEditorPage() {
+  const { toast } = useToast()
+  const router = useRouter()
+  const params = useParams<{ id: string }>()
+  const menuId = params?.id
+
+  const [loading, setLoading] = useState(true)
+  const [notFound, setNotFound] = useState(false)
+  const [menu, setMenu] = useState<MenuData | null>(null)
+  const [name, setName] = useState('')
+  const [accentColor, setAccentColor] = useState('#ea580c')
+  const [currency, setCurrency] = useState('€')
+  const [footerNote, setFooterNote] = useState('')
+  const [items, setItems] = useState<EditorItem[]>([])
+  const [categories, setCategories] = useState<string[]>([])
+  const [newCategory, setNewCategory] = useState('')
+  const [dirty, setDirty] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [publishing, setPublishing] = useState(false)
+  const [publicUrl, setPublicUrl] = useState('')
+  const keyCounter = useRef(0)
+
+  const nextKey = () => {
+    keyCounter.current += 1
+    return `item-${keyCounter.current}`
+  }
+
+  const loadMenu = useCallback(async () => {
+    if (!menuId) return
+    try {
+      const res = await fetch(`/api/menus/${menuId}`, { cache: 'no-store' })
+      if (res.status === 404) {
+        setNotFound(true)
+        return
+      }
+      if (!res.ok) throw new Error('fetch failed')
+      const data: MenuData = await res.json()
+      setMenu(data)
+      setName(data.name)
+      setAccentColor(data.accentColor)
+      setCurrency(data.currency)
+      setFooterNote(data.footerNote ?? '')
+      const mapped = data.items.map((item) => ({
+        key: nextKey(),
+        category: item.category,
+        name: item.name,
+        description: item.description ?? '',
+        price: priceToInput(item.price),
+      }))
+      setItems(mapped)
+      setCategories([...new Set(mapped.map((item) => item.category))])
+      setDirty(false)
+    } catch {
+      toast({
+        title: 'Erreur',
+        description: 'Impossible de charger ce menu.',
+        variant: 'destructive',
+      })
+    } finally {
+      setLoading(false)
+    }
+  }, [menuId, toast])
+
+  useEffect(() => {
+    void loadMenu()
+  }, [loadMenu])
+
+  useEffect(() => {
+    setPublicUrl(menu ? `${window.location.origin}/m/${menu.slug}` : '')
+  }, [menu])
+
+  // Alerte avant de quitter avec des modifications non enregistrées
+  useEffect(() => {
+    if (!dirty) return
+    const handler = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [dirty])
+
+  const markDirty = () => setDirty(true)
+
+  const updateItem = (key: string, patch: Partial<EditorItem>) => {
+    setItems((current) => current.map((item) => (item.key === key ? { ...item, ...patch } : item)))
+    markDirty()
+  }
+
+  const addItem = (category: string) => {
+    setItems((current) => [...current, { key: nextKey(), category, name: '', description: '', price: '' }])
+    markDirty()
+  }
+
+  const removeItem = (key: string) => {
+    setItems((current) => current.filter((item) => item.key !== key))
+    markDirty()
+  }
+
+  const moveItem = (index: number, direction: -1 | 1) => {
+    setItems((current) => {
+      const target = index + direction
+      if (target < 0 || target >= current.length) return current
+      const next = [...current]
+      const [moved] = next.splice(index, 1)
+      next.splice(target, 0, moved)
+      return next
+    })
+    markDirty()
+  }
+
+  const addCategory = () => {
+    const value = newCategory.trim().slice(0, 60)
+    if (!value) return
+    setCategories((current) => (current.includes(value) ? current : [...current, value]))
+    setNewCategory('')
+  }
+
+  const buildPayload = () => ({
+    name: name.trim() || 'Menu sans nom',
+    accentColor,
+    currency: currency.trim() || '€',
+    footerNote: footerNote.trim() || null,
+    items: items.map((item, index) => ({
+      category: item.category,
+      name: item.name.trim(),
+      description: item.description.trim() || null,
+      price: parsePrice(item.price),
+      sortOrder: index,
+    })),
+  })
+
+  const handleSave = async (): Promise<boolean> => {
+    if (!menuId || !menu) return false
+    if (!name.trim()) {
+      toast({ title: 'Nom requis', description: 'Donnez un nom à votre menu avant d’enregistrer.' })
+      return false
+    }
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/menus/${menuId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildPayload()),
+      })
+      if (res.status === 503) {
+        toast({
+          title: 'Base de données non configurée',
+          description: 'Sur Vercel, connectez une base gratuite pour enregistrer (guide de déploiement).',
+          variant: 'destructive',
+        })
+        return false
+      }
+      if (!res.ok) throw new Error('save failed')
+      const data: MenuData = await res.json()
+      setMenu(data)
+      const mapped = data.items.map((item) => ({
+        key: nextKey(),
+        category: item.category,
+        name: item.name,
+        description: item.description ?? '',
+        price: priceToInput(item.price),
+      }))
+      setItems(mapped)
+      setCategories((current) => {
+        const used = [...new Set(mapped.map((item) => item.category))]
+        return [...current.filter((c) => used.includes(c) || mapped.length === 0), ...used.filter((c) => !current.includes(c))]
+      })
+      setDirty(false)
+      toast({ title: 'Menu enregistré', description: 'Vos modifications sont sauvegardées.' })
+      return true
+    } catch {
+      toast({
+        title: 'Erreur',
+        description: "L'enregistrement a échoué. Réessayez.",
+        variant: 'destructive',
+      })
+      return false
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handlePublish = async (published: boolean) => {
+    if (!menuId || !menu) return
+    setPublishing(true)
+    try {
+      if (dirty) {
+        const saved = await handleSave()
+        if (!saved) return
+      }
+      const res = await fetch(`/api/menus/${menuId}/publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ published }),
+      })
+      if (res.status === 503) {
+        toast({
+          title: 'Base de données non configurée',
+          description: 'Sur Vercel, connectez une base gratuite pour publier (guide de déploiement).',
+          variant: 'destructive',
+        })
+        return
+      }
+      if (!res.ok) throw new Error('publish failed')
+      const data: MenuData = await res.json()
+      setMenu((current) =>
+        current
+          ? { ...current, published: data.published, publishedAt: data.publishedAt, updatedAt: data.updatedAt }
+          : current
+      )
+      toast(
+        published
+          ? {
+              title: 'Menu publié !',
+              description: 'Vos QR codes déjà imprimés restent valables : seule la page web est mise à jour.',
+            }
+          : { title: 'Menu dépublié', description: 'La page publique n’est plus accessible.' }
+      )
+    } catch {
+      toast({
+        title: 'Erreur',
+        description: 'La publication a échoué. Réessayez.',
+        variant: 'destructive',
+      })
+    } finally {
+      setPublishing(false)
+    }
+  }
+
+  const copyLink = async () => {
+    if (!publicUrl) return
+    try {
+      await navigator.clipboard.writeText(publicUrl)
+      toast({ title: 'Lien copié', description: publicUrl })
+    } catch {
+      toast({ title: 'Copie impossible', description: publicUrl })
+    }
+  }
+
+  // Tolérance de 2 s : Prisma et JS peuvent dater à quelques ms d'écart
+  const hasUnpublishedChanges =
+    dirty ||
+    (menu?.published === true &&
+      menu.publishedAt !== null &&
+      new Date(menu.updatedAt).getTime() - new Date(menu.publishedAt).getTime() > 2000)
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen flex-col bg-stone-50">
+        <SiteHeader />
+        <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">
+          <Skeleton className="h-14 rounded-xl" />
+          <div className="mt-6 grid gap-6 lg:grid-cols-3">
+            <div className="space-y-4 lg:col-span-2">
+              <Skeleton className="h-64 rounded-xl" />
+              <Skeleton className="h-40 rounded-xl" />
+            </div>
+            <Skeleton className="h-72 rounded-xl" />
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  if (notFound || !menu) {
+    return (
+      <div className="flex min-h-screen flex-col bg-stone-50">
+        <SiteHeader />
+        <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-16 text-center">
+          <p className="text-lg font-semibold">Menu introuvable</p>
+          <p className="mt-2 text-sm text-muted-foreground">Il a peut-être été supprimé.</p>
+          <Button asChild className="mt-6">
+            <Link href="/">
+              <ArrowLeft className="mr-2 h-4 w-4" aria-hidden />
+              Retour à mes menus
+            </Link>
+          </Button>
+        </main>
+        <SiteFooter />
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex min-h-screen flex-col bg-stone-50">
+      <SiteHeader />
+
+      {/* Barre d'outils */}
+      <div className="sticky top-0 z-10 border-b border-stone-200 bg-stone-50/95 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-2 px-4 py-3 sm:px-6">
+          <Button asChild variant="ghost" size="icon" className="h-9 w-9 shrink-0" aria-label="Retour à mes menus">
+            <Link href="/">
+              <ArrowLeft className="h-4 w-4" aria-hidden />
+            </Link>
+          </Button>
+          <Input
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value)
+              markDirty()
+            }}
+            placeholder="Nom du menu"
+            className="h-9 min-w-0 flex-1 border-transparent bg-transparent text-base font-semibold shadow-none focus-visible:border-stone-300 focus-visible:bg-white sm:text-lg"
+            maxLength={80}
+            aria-label="Nom du menu"
+          />
+          {menu.published ? (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800">
+              <BadgeCheck className="h-3.5 w-3.5" aria-hidden />
+              Publié
+            </span>
+          ) : (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-stone-200 px-2.5 py-1 text-xs font-medium text-stone-600">
+              <CircleDashed className="h-3.5 w-3.5" aria-hidden />
+              Brouillon
+            </span>
+          )}
+          {hasUnpublishedChanges && (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800">
+              <TriangleAlert className="h-3.5 w-3.5" aria-hidden />
+              <span className="hidden sm:inline">Modifications non publiées</span>
+              <span className="sm:hidden">Non publié</span>
+            </span>
+          )}
+          <div className="flex shrink-0 items-center gap-2">
+            <Button variant="outline" size="sm" className="h-9" onClick={() => void handleSave()} disabled={saving}>
+              {saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden /> : <Save className="mr-1.5 h-4 w-4" aria-hidden />}
+              Enregistrer
+            </Button>
+            <Button
+              size="sm"
+              className="h-9 bg-amber-600 text-white hover:bg-amber-700"
+              onClick={() => void handlePublish(true)}
+              disabled={publishing}
+            >
+              {publishing ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden /> : <Globe className="mr-1.5 h-4 w-4" aria-hidden />}
+              {menu.published ? (dirty ? 'Enregistrer & republier' : 'Republier') : 'Publier'}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6">
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Colonne principale : catégories et articles */}
+          <div className="space-y-5 lg:col-span-2">
+            {categories.map((category) => {
+              const sectionItems = items
+                .map((item, index) => ({ item, index }))
+                .filter(({ item }) => item.category === category)
+              return (
+                <Card key={category}>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                    <CardTitle className="text-lg" style={{ color: accentColor }}>
+                      {category}
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+                      onClick={() => addItem(category)}
+                    >
+                      <Plus className="mr-1 h-3.5 w-3.5" aria-hidden />
+                      Ajouter un article
+                    </Button>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {sectionItems.length === 0 ? (
+                      <p className="rounded-lg border border-dashed border-stone-200 py-4 text-center text-sm text-muted-foreground">
+                        Aucun article dans cette catégorie pour l'instant.
+                      </p>
+                    ) : (
+                      sectionItems.map(({ item, index }) => (
+                        <div key={item.key} className="rounded-xl border border-stone-200 bg-white p-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Input
+                              value={item.name}
+                              onChange={(e) => updateItem(item.key, { name: e.target.value })}
+                              placeholder="Nom du plat"
+                              className="h-9 min-w-0 flex-1 font-medium"
+                              maxLength={120}
+                              aria-label="Nom du plat"
+                            />
+                            <Input
+                              value={item.price}
+                              onChange={(e) => updateItem(item.key, { price: e.target.value })}
+                              placeholder="Prix"
+                              inputMode="decimal"
+                              className="h-9 w-24 shrink-0 text-right tabular-nums"
+                              aria-label={`Prix en ${currency}`}
+                            />
+                            <div className="flex shrink-0 items-center gap-0.5">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground"
+                                onClick={() => moveItem(index, -1)}
+                                disabled={index === 0}
+                                aria-label="Monter l'article"
+                              >
+                                <ChevronUp className="h-4 w-4" aria-hidden />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground"
+                                onClick={() => moveItem(index, 1)}
+                                disabled={index === items.length - 1}
+                                aria-label="Descendre l'article"
+                              >
+                                <ChevronDown className="h-4 w-4" aria-hidden />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                onClick={() => removeItem(item.key)}
+                                aria-label={`Supprimer ${item.name || 'cet article'}`}
+                              >
+                                <Trash2 className="h-4 w-4" aria-hidden />
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <Input
+                              value={item.description}
+                              onChange={(e) => updateItem(item.key, { description: e.target.value })}
+                              placeholder="Description (ingrédients, accompagnement…)"
+                              className="h-8 min-w-0 flex-1 text-sm"
+                              maxLength={400}
+                              aria-label="Description du plat"
+                            />
+                            <Select
+                              value={category}
+                              onValueChange={(value) => updateItem(item.key, { category: value })}
+                            >
+                              <SelectTrigger className="h-8 w-36 shrink-0 text-xs" aria-label="Catégorie de l'article">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {categories.map((c) => (
+                                  <SelectItem key={c} value={c}>
+                                    {c}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+              )
+            })}
+
+            {/* Nouvelle catégorie */}
+            <Card className="border-dashed">
+              <CardContent className="flex flex-wrap items-center gap-2 p-4">
+                <Input
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      addCategory()
+                    }
+                  }}
+                  placeholder="Nouvelle catégorie (ex. Entrées, Plats, Desserts, Boissons…)"
+                  className="h-9 min-w-0 flex-1"
+                  maxLength={60}
+                  aria-label="Nom de la nouvelle catégorie"
+                />
+                <Button variant="outline" className="h-9" onClick={addCategory}>
+                  <Plus className="mr-1.5 h-4 w-4" aria-hidden />
+                  Ajouter la catégorie
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Colonne latérale : apparence et publication */}
+          <div className="space-y-5">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Apparence</CardTitle>
+                <CardDescription>
+                  Style simple et vivant : choisissez la couleur qui habille la page publique.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="accent-color">Couleur d'accent</Label>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {ACCENT_PRESETS.map((preset) => (
+                      <button
+                        key={preset.value}
+                        type="button"
+                        onClick={() => {
+                          setAccentColor(preset.value)
+                          markDirty()
+                        }}
+                        className="h-7 w-7 rounded-full border-2 transition-transform hover:scale-110"
+                        style={{
+                          backgroundColor: preset.value,
+                          borderColor: accentColor === preset.value ? '#1c1917' : 'transparent',
+                        }}
+                        aria-label={`Couleur ${preset.name}`}
+                        aria-pressed={accentColor === preset.value}
+                        title={preset.name}
+                      />
+                    ))}
+                    <label className="ml-1 flex h-7 cursor-pointer items-center gap-1.5 rounded-full border border-stone-200 px-2 text-xs text-muted-foreground hover:bg-stone-50">
+                      <span className="h-3.5 w-3.5 rounded-full border" style={{ backgroundColor: accentColor }} aria-hidden />
+                      Autre
+                      <input
+                        id="accent-color"
+                        type="color"
+                        value={accentColor}
+                        onChange={(e) => {
+                          setAccentColor(e.target.value)
+                          markDirty()
+                        }}
+                        className="sr-only"
+                      />
+                    </label>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="currency">Symbole de devise</Label>
+                  <Input
+                    id="currency"
+                    value={currency}
+                    onChange={(e) => {
+                      setCurrency(e.target.value)
+                      markDirty()
+                    }}
+                    className="h-9 w-20 text-center"
+                    maxLength={4}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="footer-note">Note de bas de menu (facultatif)</Label>
+                  <Textarea
+                    id="footer-note"
+                    value={footerNote}
+                    onChange={(e) => {
+                      setFooterNote(e.target.value)
+                      markDirty()
+                    }}
+                    placeholder="Ex. Prix TTC — service compris · Supplément pain 1 €"
+                    className="min-h-20 text-sm"
+                    maxLength={200}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Publication</CardTitle>
+                <CardDescription>
+                  {menu.published
+                    ? 'Votre menu est visible en ligne. Republiez après chaque modification : l’adresse reste la même.'
+                    : 'Publiez votre menu pour obtenir son adresse web et générer son QR code.'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {menu.published ? (
+                  <>
+                    <div className="flex items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 p-2.5">
+                      <Link2 className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={publicUrl}>
+                        {publicUrl}
+                      </span>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => void copyLink()} aria-label="Copier le lien public">
+                        <Copy className="h-3.5 w-3.5" aria-hidden />
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button variant="outline" size="sm" className="h-9" onClick={() => window.open(`/m/${menu.slug}`, '_blank')}>
+                        <Eye className="mr-1.5 h-4 w-4" aria-hidden />
+                        Voir en ligne
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="h-9 bg-amber-600 text-white hover:bg-amber-700"
+                        onClick={() => router.push(`/qr?url=${encodeURIComponent(publicUrl)}&title=${encodeURIComponent(menu.name)}`)}
+                      >
+                        <QrCode className="mr-1.5 h-4 w-4" aria-hidden />
+                        QR code
+                      </Button>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-full text-xs text-muted-foreground"
+                      onClick={() => void handlePublish(false)}
+                      disabled={publishing}
+                    >
+                      Dépublier ce menu
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      Astuce : vous pouvez prévisualiser le rendu avant publication via l'aperçu
+                      ci-dessous — seul vous pouvez voir ce lien secret.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9 w-full"
+                      onClick={() => window.open(`/m/${menu.slug}?preview=${menu.id}`, '_blank')}
+                    >
+                      <Eye className="mr-1.5 h-4 w-4" aria-hidden />
+                      Prévisualiser le brouillon
+                    </Button>
+                    <Button
+                      className="h-9 w-full bg-amber-600 text-white hover:bg-amber-700"
+                      onClick={() => void handlePublish(true)}
+                      disabled={publishing}
+                    >
+                      <Globe className="mr-1.5 h-4 w-4" aria-hidden />
+                      Publier maintenant
+                    </Button>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-amber-200 bg-amber-50/60">
+              <CardContent className="flex gap-3 p-4">
+                <QrCode className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden />
+                <p className="text-xs leading-relaxed text-amber-900">
+                  <strong>Le QR code ne change jamais.</strong> Une fois imprimé, il pointe toujours
+                  vers la même adresse : modifiez vos prix ou ajoutez un plat, republiez, et vos
+                  tables affichent instantanément la nouvelle version.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </main>
+
+      <SiteFooter />
+    </div>
+  )
+}

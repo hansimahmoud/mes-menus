@@ -1,0 +1,114 @@
+=====================================================
+ MES MENUS & QR CODES
+ Guide de mise en ligne gratuite sur Vercel
+=====================================================
+
+CE QU'IL VOUS FAUT
+------------------
+- Ce dossier décompressé sur votre ordinateur
+- Environ 15 à 20 minutes
+- Un compte GitHub et un compte Vercel (gratuits)
+
+IMPORTANT — LA BASE DE DONNÉES EST INDISPENSABLE
+------------------------------------------------
+Vos menus sont enregistrés en ligne pour rester toujours à jour
+(sans renvoyer de QR code). Il faut donc créer une base de données
+gratuite pendant l'installation — c'est l'étape 3, elle prend
+2 minutes et Vercel la propose en un clic.
+
+
+ÉTAPE 1 — ENVOYER LE PROJET SUR GITHUB (5 min)
+----------------------------------------------
+1) Connectez-vous sur github.com.
+
+2) Cliquez le « + » en haut à droite > « New repository ».
+   - Repository name : mes-menus
+   - Visibilité : Public
+   - Cliquez « Create repository ».
+
+3) Sur la page du nouveau dépôt, cliquez le lien
+   « uploading an existing file ».
+
+4) Ouvrez le dossier décompressé, sélectionnez TOUS les fichiers
+   et dossiers qu'il contient (src, prisma, public, scripts,
+   package.json, vercel.json, LISEZMOI, etc.) et glissez-les dans
+   la zone de dépôt de GitHub.
+   - Conseil : activez l'affichage des éléments cachés de votre
+     explorateur pour glisser aussi « .gitignore » et
+     « .env.example » (facultatif mais propre).
+   - ATTENTION : ne glissez JAMAIS un fichier nommé « .env »
+     (seul « .env.example » doit être envoyé).
+
+5) Cliquez « Commit changes » et patientez.
+
+
+ÉTAPE 2 — CRÉER LE PROJET SUR VERCEL (3 min)
+--------------------------------------------
+1) Connectez-vous sur vercel.com avec « Continue with GitHub ».
+
+2) Tableau de bord : « Add New... » > « Project » > « Import »
+   à côté de votre dépôt mes-menus.
+
+3) Ne modifiez aucun réglage : cliquez « Deploy » et patientez
+   2 à 3 minutes. (La base de données viendra juste après :
+   tant qu'elle n'existe pas, la page des menus affiche un
+   message d'attente — c'est normal.)
+
+
+ÉTAPE 3 — CRÉER LA BASE DE DONNÉES GRATUITE (2 min)
+---------------------------------------------------
+1) Ouvrez votre projet sur Vercel > onglet « Storage »
+   (Stockage).
+
+2) « Create Database » > choisissez « Neon » (Postgres)
+   > plan gratuit (Free) > Create.
+
+3) Vercel crée la base et ajoute automatiquement la variable
+   DATABASE_URL à votre projet.
+
+4) Onglet « Deployments » > cliquez les « ... » du dernier
+   déploiement > « Redeploy » > Confirm.
+
+5) C'est tout ! Les tables sont créées automatiquement pendant
+   le déploiement. Votre application est pleinement opérationnelle.
+
+
+VOS MENUS SONT EN LIGNE
+-----------------------
+- Adresse du tableau de bord : https://votre-projet.vercel.app
+- Créez un menu, ajoutez vos catégories et plats, publiez.
+- La page publique du menu a une adresse du type :
+  https://votre-projet.vercel.app/m/mon-menu-abc123
+- Depuis le tableau de bord ou l'éditeur, le bouton « QR code »
+  préremplit le générateur avec l'adresse de la page publique.
+- Modifiez puis republiez : l'adresse NE CHANGE JAMAIS, vos QR
+  codes déjà imprimés restent valables.
+
+
+METTRE À JOUR L'APPLICATION PLUS TARD
+-------------------------------------
+Sur github.com > votre dépôt > « Add file » > « Upload files » >
+glissez les fichiers modifiés > « Commit changes ».
+Vercel redéploie automatiquement en ~2 minutes. Les menus déjà
+créés sont conservés.
+
+
+DÉVELOPPER SUR VOTRE ORDINATEUR (facultatif)
+--------------------------------------------
+Prérequis : installer Node.js 20 ou plus (nodejs.org), puis,
+en ouvrant un terminal dans ce dossier :
+
+  npm install
+  npm run db:push      (crée la base SQLite locale)
+  npm run dev          (ouvre http://localhost:3000)
+
+
+BON À SAVOIR
+------------
+- Les fichiers vercel.json et scripts/vercel-build.sh sont déjà
+  configurés : ils créent les tables automatiquement pendant le
+  déploiement quand la DATABASE_URL est présente.
+- L'offre gratuite de Vercel (Hobby) et celle de Neon couvrent
+  largement cet usage.
+- Avant impression grand format : testez vos QR codes avec 2 ou 3
+  téléphones différents, et imprimez en 2 x 2 cm minimum.
