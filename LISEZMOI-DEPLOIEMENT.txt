@@ -73,6 +73,41 @@ gratuite pendant l'installation — c'est l'étape 3, elle prend
    le déploiement. Votre application est pleinement opérationnelle.
 
 
+ÉTAPE 4 — PROTÉGER VOS PAGES PAR MOT DE PASSE (2 min, recommandé)
+-----------------------------------------------------------------
+Sans protection, n'importe qui connaissant l'adresse de votre
+tableau de bord peut voir et modifier vos menus. Pour restreindre
+l'accès à vous seul :
+
+1) Sur Vercel, ouvrez votre projet > onglet « Settings » >
+   « Environment Variables ».
+
+2) Ajoutez une variable :
+   - Key (nom) : ADMIN_PASSWORD
+   - Value (valeur) : le mot de passe de votre choix
+     (ex. MonRestaurant2026 — notez-le précieusement)
+   - Environments : cochez Production, Preview et Development
+   - Cliquez « Save ».
+
+3) Onglet « Deployments » > « ... » du dernier déploiement >
+   « Redeploy » > Confirm.
+
+C'est tout :
+- Le tableau de bord, l'éditeur de menus et le générateur de QR
+  codes demandent désormais ce mot de passe (page « Espace gérant »).
+- La page PUBLIQUE de vos menus (/m/...) reste accessible à vos
+  clients, sans mot de passe : vos QR codes imprimés fonctionnent
+  exactement comme avant.
+- Un bouton « Déconnexion » apparaît dans l'en-tête de l'espace
+  d'administration.
+- Pour changer de mot de passe : refaites la même manipulation avec
+  la nouvelle valeur (les sessions ouvertes sont déconnectées).
+- Pour retirer la protection : supprimez la variable
+  ADMIN_PASSWORD puis Redeploy.
+- Sans cette variable, l'application reste ouverte à tous (comme
+  avant) : rien ne casse si vous sautez cette étape.
+
+
 VOS MENUS SONT EN LIGNE
 -----------------------
 - Adresse du tableau de bord : https://votre-projet.vercel.app
