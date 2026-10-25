@@ -11,6 +11,10 @@ interface IncomingItem {
   sortOrder?: unknown
 }
 
+// Valeurs acceptées pour le style d'écriture et la taille du texte
+const FONT_STYLES_ALLOWED = ['classique', 'moderne', 'bistrot', 'manuscrit']
+const FONT_SIZES_ALLOWED = ['compact', 'normal', 'grand']
+
 // Valide et nettoie un article entrant du formulaire d'édition
 function sanitizeItem(item: IncomingItem, sortOrder: number) {
   const name = typeof item.name === 'string' ? item.name.trim().slice(0, 120) : ''
@@ -73,6 +77,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       typeof body?.accentColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(body.accentColor)
         ? body.accentColor
         : '#9a3412'
+    const fontStyle = FONT_STYLES_ALLOWED.includes(body?.fontStyle) ? body.fontStyle : 'classique'
+    const fontSize = FONT_SIZES_ALLOWED.includes(body?.fontSize) ? body.fontSize : 'normal'
     const currency =
       typeof body?.currency === 'string' && body.currency.trim() ? body.currency.trim().slice(0, 4) : '€'
     const footerNote =
@@ -95,7 +101,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       }
       return tx.menu.update({
         where: { id },
-        data: { name, accentColor, currency, footerNote },
+        data: { name, accentColor, fontStyle, fontSize, currency, footerNote },
         include: { items: { orderBy: { sortOrder: 'asc' } } },
       })
     })

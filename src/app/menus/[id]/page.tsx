@@ -37,6 +37,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
+import { cn } from '@/lib/utils'
 
 interface MenuData {
   id: string
@@ -45,6 +46,8 @@ interface MenuData {
   published: boolean
   publishedAt: string | null
   accentColor: string
+  fontStyle: string
+  fontSize: string
   currency: string
   footerNote: string | null
   updatedAt: string
@@ -75,6 +78,22 @@ const ACCENT_PRESETS: { name: string; value: string }[] = [
   { name: 'Rouge tomate', value: '#dc2626' },
 ]
 
+// Styles d'écriture proposés dans l'éditeur (rendus avec les vraies polices,
+// chargées globalement par layout.tsx).
+const FONT_STYLE_OPTIONS: { value: string; label: string; sampleFont: string }[] = [
+  { value: 'classique', label: 'Classique', sampleFont: 'var(--font-playfair)' },
+  { value: 'moderne', label: 'Moderne', sampleFont: 'var(--font-geist-sans)' },
+  { value: 'bistrot', label: 'Bistrot', sampleFont: 'var(--font-cormorant)' },
+  { value: 'manuscrit', label: 'Manuscrit', sampleFont: 'var(--font-dancing)' },
+]
+
+// Échelles de taille du texte de la page publique.
+const FONT_SIZE_OPTIONS: { value: string; label: string; sampleSize: string }[] = [
+  { value: 'compact', label: 'Compacte', sampleSize: '0.8rem' },
+  { value: 'normal', label: 'Normale', sampleSize: '1.05rem' },
+  { value: 'grand', label: 'Généreuse', sampleSize: '1.35rem' },
+]
+
 function parsePrice(raw: string): number | null {
   const cleaned = raw.trim().replace(',', '.')
   if (!cleaned) return null
@@ -98,6 +117,8 @@ export default function MenuEditorPage() {
   const [menu, setMenu] = useState<MenuData | null>(null)
   const [name, setName] = useState('')
   const [accentColor, setAccentColor] = useState('#ea580c')
+  const [fontStyle, setFontStyle] = useState('classique')
+  const [fontSize, setFontSize] = useState('normal')
   const [currency, setCurrency] = useState('€')
   const [footerNote, setFooterNote] = useState('')
   const [items, setItems] = useState<EditorItem[]>([])
@@ -127,6 +148,8 @@ export default function MenuEditorPage() {
       setMenu(data)
       setName(data.name)
       setAccentColor(data.accentColor)
+      setFontStyle(data.fontStyle || 'classique')
+      setFontSize(data.fontSize || 'normal')
       setCurrency(data.currency)
       setFooterNote(data.footerNote ?? '')
       const mapped = data.items.map((item) => ({
@@ -207,6 +230,8 @@ export default function MenuEditorPage() {
   const buildPayload = () => ({
     name: name.trim() || 'Menu sans nom',
     accentColor,
+    fontStyle,
+    fontSize,
     currency: currency.trim() || '€',
     footerNote: footerNote.trim() || null,
     items: items.map((item, index) => ({
@@ -574,7 +599,7 @@ export default function MenuEditorPage() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Apparence</CardTitle>
                 <CardDescription>
-                  Style simple et vivant : choisissez la couleur qui habille la page publique.
+                  Couleur, écriture et taille : habillez la page publique de votre menu.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -614,6 +639,70 @@ export default function MenuEditorPage() {
                       />
                     </label>
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Style d'écriture</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {FONT_STYLE_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => {
+                          setFontStyle(option.value)
+                          markDirty()
+                        }}
+                        aria-pressed={fontStyle === option.value}
+                        className={cn(
+                          'rounded-xl border px-3 py-2 text-left transition-all hover:bg-stone-50',
+                          fontStyle === option.value
+                            ? 'border-amber-600 bg-amber-50 ring-1 ring-amber-600'
+                            : 'border-stone-200'
+                        )}
+                      >
+                        <span
+                          className="block text-lg leading-snug text-stone-900"
+                          style={{ fontFamily: option.sampleFont }}
+                        >
+                          La carte
+                        </span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">{option.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Taille du texte</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {FONT_SIZE_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => {
+                          setFontSize(option.value)
+                          markDirty()
+                        }}
+                        aria-pressed={fontSize === option.value}
+                        className={cn(
+                          'rounded-xl border px-2 py-2 text-center transition-all hover:bg-stone-50',
+                          fontSize === option.value
+                            ? 'border-amber-600 bg-amber-50 ring-1 ring-amber-600'
+                            : 'border-stone-200'
+                        )}
+                      >
+                        <span
+                          className="block font-semibold leading-none text-stone-900"
+                          style={{ fontSize: option.sampleSize }}
+                        >
+                          Aa
+                        </span>
+                        <span className="mt-1 block text-xs text-muted-foreground">{option.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Compacte pour les grandes cartes, Généreuse pour être lu facilement sur
+                    téléphone ou affiché en salle.
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="currency">Symbole de devise</Label>

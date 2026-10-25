@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import type { CSSProperties } from 'react'
 import Link from 'next/link'
 import { db } from '@/lib/db'
 import { UtensilsCrossed, ScanLine, Clock, TriangleAlert } from 'lucide-react'
@@ -69,6 +70,76 @@ const dateFormatter = new Intl.DateTimeFormat('fr-FR', {
   year: 'numeric',
 })
 
+// Styles d'écriture disponibles pour la page publique (choisis dans l'éditeur).
+// Les variables --font-* sont définies dans src/app/layout.tsx (next/font).
+const FONT_STYLES: Record<
+  string,
+  {
+    titres: string
+    texte: string
+    majuscules: 'uppercase' | 'none'
+    espacement: string
+    echelleCategorie: number
+  }
+> = {
+  classique: {
+    titres: 'var(--font-playfair)',
+    texte: 'var(--font-lora)',
+    majuscules: 'uppercase',
+    espacement: '0.2em',
+    echelleCategorie: 1,
+  },
+  moderne: {
+    titres: 'var(--font-geist-sans)',
+    texte: 'var(--font-geist-sans)',
+    majuscules: 'uppercase',
+    espacement: '0.2em',
+    echelleCategorie: 1,
+  },
+  bistrot: {
+    titres: 'var(--font-cormorant)',
+    texte: 'var(--font-lora)',
+    majuscules: 'uppercase',
+    espacement: '0.16em',
+    echelleCategorie: 1.15,
+  },
+  manuscrit: {
+    titres: 'var(--font-dancing)',
+    texte: 'var(--font-lora)',
+    majuscules: 'none',
+    espacement: '0.02em',
+    echelleCategorie: 1.4,
+  },
+}
+
+// Échelles de taille du texte (Compacte / Normale / Généreuse).
+const FONT_SIZES: Record<
+  string,
+  { nom: string; categorie: string; item: string; description: string; prix: string }
+> = {
+  compact: {
+    nom: '1.4rem',
+    categorie: '0.7rem',
+    item: '0.88rem',
+    description: '0.75rem',
+    prix: '0.88rem',
+  },
+  normal: {
+    nom: '1.75rem',
+    categorie: '0.8rem',
+    item: '1rem',
+    description: '0.85rem',
+    prix: '1rem',
+  },
+  grand: {
+    nom: '2.15rem',
+    categorie: '0.92rem',
+    item: '1.12rem',
+    description: '0.95rem',
+    prix: '1.12rem',
+  },
+}
+
 // Séparateur décoratif « carte imprimée » : filet — losange — filet
 function Ornament({ color }: { color: string }) {
   return (
@@ -110,8 +181,14 @@ function MenuSection({
           style={{ backgroundColor: accent }}
         />
         <h2
-          className="text-sm font-bold uppercase tracking-[0.2em]"
-          style={{ color: accent }}
+          className="font-bold"
+          style={{
+            color: accent,
+            fontFamily: 'var(--menu-titres)',
+            fontSize: 'calc(var(--taille-categorie) * var(--menu-echelle-categorie))',
+            textTransform: 'var(--menu-majuscules)',
+            letterSpacing: 'var(--menu-espacement)',
+          }}
         >
           {section.category}
         </h2>
@@ -130,21 +207,32 @@ function MenuSection({
         {section.items.map((item) => (
           <li key={item.id}>
             <div className="flex items-baseline gap-1.5">
-              <h3 className="font-semibold text-stone-900">{item.name}</h3>
+              <h3
+                className="font-semibold text-stone-900"
+                style={{ fontSize: 'var(--taille-item)' }}
+              >
+                {item.name}
+              </h3>
               {item.price !== null && (
                 <>
                   <span
                     aria-hidden
                     className="mx-1 flex-1 border-b border-dotted border-stone-300"
                   />
-                  <span className="shrink-0 font-bold tabular-nums" style={{ color: accent }}>
+                  <span
+                    className="shrink-0 font-bold tabular-nums"
+                    style={{ color: accent, fontSize: 'var(--taille-prix)' }}
+                  >
                     {formatPrice(item.price, currency)}
                   </span>
                 </>
               )}
             </div>
             {item.description && (
-              <p className="mt-1 pr-8 text-sm italic leading-relaxed text-stone-500">
+              <p
+                className="mt-1 pr-8 italic leading-relaxed text-stone-500"
+                style={{ fontSize: 'var(--taille-description)' }}
+              >
                 {item.description}
               </p>
             )}
@@ -204,6 +292,8 @@ export default async function PublicMenuPage({ params, searchParams }: PageProps
   }
 
   const accent = menu.accentColor || '#ea580c'
+  const styleEcriture = FONT_STYLES[menu.fontStyle] ?? FONT_STYLES.classique
+  const tailleTexte = FONT_SIZES[menu.fontSize] ?? FONT_SIZES.normal
   const isDraftPreview = !menu.published
 
   // Répartit les catégories sur les deux volets intérieurs du dépliant
@@ -237,8 +327,23 @@ export default async function PublicMenuPage({ params, searchParams }: PageProps
           </p>
         )}
 
-        {/* Le dépliant ouvert : couverture + deux volets intérieurs */}
-        <article className="animate-fade-up overflow-hidden rounded-[2rem] bg-[#fffdf8] shadow-xl shadow-stone-900/10 ring-1 ring-stone-900/5 md:grid md:grid-cols-3">
+        {/* Le dépliant ouvert : couverture + deux volets intérieurs.
+            Style d'écriture et tailles appliqués via variables CSS. */}
+        <article
+          className="animate-fade-up overflow-hidden rounded-[2rem] bg-[#fffdf8] shadow-xl shadow-stone-900/10 ring-1 ring-stone-900/5 md:grid md:grid-cols-3"
+          style={{
+            fontFamily: styleEcriture.texte,
+            '--menu-titres': styleEcriture.titres,
+            '--menu-majuscules': styleEcriture.majuscules,
+            '--menu-espacement': styleEcriture.espacement,
+            '--menu-echelle-categorie': String(styleEcriture.echelleCategorie),
+            '--taille-nom': tailleTexte.nom,
+            '--taille-categorie': tailleTexte.categorie,
+            '--taille-item': tailleTexte.item,
+            '--taille-description': tailleTexte.description,
+            '--taille-prix': tailleTexte.prix,
+          } as CSSProperties}
+        >
           {/* Volet 1 — la couverture, en couleur, sur toute la hauteur */}
           <header
             className="relative flex flex-col overflow-hidden px-6 pb-8 pt-10 text-center text-white sm:px-10"
@@ -252,7 +357,10 @@ export default async function PublicMenuPage({ params, searchParams }: PageProps
             <div className="animate-float-soft mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm">
               <UtensilsCrossed className="h-7 w-7" aria-hidden />
             </div>
-            <h1 className="mt-4 text-3xl font-extrabold tracking-tight drop-shadow-sm sm:text-4xl">
+            <h1
+              className="mt-4 font-extrabold tracking-tight drop-shadow-sm"
+              style={{ fontFamily: 'var(--menu-titres)', fontSize: 'var(--taille-nom)' }}
+            >
               {menu.name}
             </h1>
             <span className="mx-auto mt-4 inline-flex w-fit items-center rounded-full bg-white/20 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] backdrop-blur-sm">
@@ -261,7 +369,12 @@ export default async function PublicMenuPage({ params, searchParams }: PageProps
 
             <div className="mt-auto pt-10">
               <Ornament color="rgb(255 255 255 / 0.55)" />
-              <p className="mt-3 font-serif text-lg italic text-white/90">Bon appétit !</p>
+              <p
+                className="mt-3 text-lg italic text-white/90"
+                style={{ fontFamily: 'var(--menu-titres)' }}
+              >
+                Bon appétit !
+              </p>
             </div>
           </header>
 

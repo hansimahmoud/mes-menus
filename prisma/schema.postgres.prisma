@@ -30,6 +30,8 @@ model Menu {
   published   Boolean    @default(false)
   publishedAt DateTime?
   accentColor String     @default("#ea580c")
+  fontStyle   String     @default("classique")
+  fontSize    String     @default("normal")
   currency    String     @default("€")
   footerNote  String?
   createdAt   DateTime   @default(now())
