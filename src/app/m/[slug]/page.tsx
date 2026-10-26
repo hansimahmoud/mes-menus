@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import type { CSSProperties } from 'react'
 import Link from 'next/link'
 import { db } from '@/lib/db'
-import { UtensilsCrossed, ScanLine, Clock, TriangleAlert } from 'lucide-react'
+import { UtensilsCrossed, ScanLine, Sparkles, TriangleAlert } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,7 +53,7 @@ function formatPrice(price: number, currency: string): string {
   return `${price.toFixed(2).replace('.', ',')} ${currency}`
 }
 
-/** Assombrit (facteur < 1) une couleur hex #rrggbb, avec repli sûr. */
+/** Assombrit (facteur < 1) ou éclaircit (facteur > 1) une couleur hex #rrggbb, avec repli sûr. */
 function shade(hex: string, factor: number): string {
   const match = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
   if (!match) return hex
@@ -296,11 +296,6 @@ export default async function PublicMenuPage({ params, searchParams }: PageProps
   const tailleTexte = FONT_SIZES[menu.fontSize] ?? FONT_SIZES.normal
   const isDraftPreview = !menu.published
 
-  // Répartit les catégories sur les deux volets intérieurs du dépliant
-  const midCount = Math.ceil(sections.length / 2)
-  const voletMilieu = sections.slice(0, midCount)
-  const voletDroit = sections.slice(midCount)
-
   return (
     <main className="relative min-h-screen bg-[#fdf9f2]">
       {/* Taches de couleur floues : l'ambiance vivante, sans gêner la lecture */}
@@ -319,7 +314,7 @@ export default async function PublicMenuPage({ params, searchParams }: PageProps
         />
       </div>
 
-      <div className="relative mx-auto w-full max-w-lg px-4 pb-14 pt-7 sm:px-6 sm:pt-10 md:max-w-4xl">
+      <div className="relative mx-auto w-full max-w-xl px-4 pb-14 pt-7 sm:max-w-2xl sm:px-6 sm:pt-10">
         {isDraftPreview && (
           <p className="mb-4 flex items-center justify-center gap-2 rounded-2xl border border-amber-300 bg-amber-100 px-4 py-2.5 text-center text-xs font-semibold text-amber-800">
             <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden />
@@ -327,10 +322,10 @@ export default async function PublicMenuPage({ params, searchParams }: PageProps
           </p>
         )}
 
-        {/* Le dépliant ouvert : couverture + deux volets intérieurs.
-            Style d'écriture et tailles appliqués via variables CSS. */}
+        {/* La feuille de menu : une seule page posée sur la table,
+            en-tête réduite et éclatante, corps aéré façon carte imprimée. */}
         <article
-          className="animate-fade-up overflow-hidden rounded-[2rem] bg-[#fffdf8] shadow-xl shadow-stone-900/10 ring-1 ring-stone-900/5 md:grid md:grid-cols-3"
+          className="animate-fade-up overflow-hidden rounded-[1.75rem] bg-[#fffdf8] shadow-[0_24px_70px_-24px_rgba(68,50,30,0.28)] ring-1 ring-stone-900/5"
           style={{
             fontFamily: styleEcriture.texte,
             '--menu-titres': styleEcriture.titres,
@@ -344,49 +339,72 @@ export default async function PublicMenuPage({ params, searchParams }: PageProps
             '--taille-prix': tailleTexte.prix,
           } as CSSProperties}
         >
-          {/* Volet 1 — la couverture, en couleur, sur toute la hauteur */}
+          {/* En-tête réduite, en dégradé éclatant avec balayage de lumière */}
           <header
-            className="relative flex flex-col overflow-hidden px-6 pb-8 pt-10 text-center text-white sm:px-10"
-            style={{ background: `linear-gradient(160deg, ${accent}, ${shade(accent, 0.7)})` }}
+            className="relative overflow-hidden px-6 pb-7 pt-7 text-center text-white sm:px-10 sm:pb-8 sm:pt-9"
+            style={{
+              background: `linear-gradient(150deg, ${shade(accent, 1.12)}, ${accent} 55%, ${shade(accent, 0.66)})`,
+            }}
           >
-            <div aria-hidden className="absolute -right-12 -top-12 h-36 w-36 rounded-full bg-white/10" />
-            <div aria-hidden className="absolute -left-14 top-1/2 h-28 w-28 rounded-full bg-white/10" />
-            <div aria-hidden className="absolute bottom-24 right-9 h-3 w-3 rounded-full bg-white/25" />
-            <div aria-hidden className="absolute top-16 left-8 h-2 w-2 rounded-full bg-white/25" />
+            {/* Reflet lumineux en haut à gauche + bulles délicates */}
+            <div
+              aria-hidden
+              className="absolute inset-0"
+              style={{
+                background:
+                  'radial-gradient(circle at 26% 8%, rgb(255 255 255 / 0.3), transparent 52%)',
+              }}
+            />
+            <div aria-hidden className="absolute -right-10 -top-14 h-32 w-32 rounded-full bg-white/10" />
+            <div aria-hidden className="absolute -left-12 bottom-0 h-24 w-24 rounded-full bg-white/10" />
+            {/* Balayage brillant (animation discrète, coupée si mouvement réduit) */}
+            <span aria-hidden className="sheet-shine" />
 
-            <div className="animate-float-soft mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm">
-              <UtensilsCrossed className="h-7 w-7" aria-hidden />
-            </div>
-            <h1
-              className="mt-4 font-extrabold tracking-tight drop-shadow-sm"
-              style={{ fontFamily: 'var(--menu-titres)', fontSize: 'var(--taille-nom)' }}
-            >
-              {menu.name}
-            </h1>
-            <span className="mx-auto mt-4 inline-flex w-fit items-center rounded-full bg-white/20 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] backdrop-blur-sm">
-              Notre carte
-            </span>
-
-            <div className="mt-auto pt-10">
-              <Ornament color="rgb(255 255 255 / 0.55)" />
-              <p
-                className="mt-3 text-lg italic text-white/90"
-                style={{ fontFamily: 'var(--menu-titres)' }}
+            <div className="relative">
+              <div className="animate-float-soft mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-white/20 shadow-inner ring-1 ring-white/40">
+                <UtensilsCrossed className="h-5 w-5" aria-hidden />
+              </div>
+              <h1
+                className="mt-3.5 font-extrabold leading-tight tracking-tight"
+                style={{
+                  fontFamily: 'var(--menu-titres)',
+                  fontSize: 'calc(var(--taille-nom) * 0.88)',
+                  textShadow: '0 1px 12px rgb(0 0 0 / 0.16)',
+                }}
               >
-                Bon appétit !
-              </p>
+                {menu.name}
+              </h1>
+              <span className="mt-3.5 inline-flex w-fit items-center gap-1.5 rounded-full bg-white/15 px-3.5 py-1 text-[10px] font-bold uppercase tracking-[0.22em] ring-1 ring-white/30 backdrop-blur-sm">
+                <Sparkles className="h-3 w-3" aria-hidden />
+                Notre carte
+              </span>
             </div>
+
+            {/* Filet doré éclatant entre l'en-tête et le corps de la feuille */}
+            <div
+              aria-hidden
+              className="absolute inset-x-0 bottom-0 h-[3px]"
+              style={{
+                background:
+                  'linear-gradient(90deg, transparent, rgb(251 191 36 / 0.85) 26%, rgb(255 255 255 / 0.95) 50%, rgb(251 191 36 / 0.85) 74%, transparent)',
+              }}
+            />
           </header>
 
-          {/* Volet 2 — premières catégories, volet central légèrement plus clair */}
-          <div className="relative flex flex-col border-t border-stone-900/5 px-6 py-8 sm:px-7 md:border-x md:border-t-0 md:bg-white/50 pli-droite pli-gauche">
-            <div className="space-y-8">
-              {voletMilieu.length === 0 ? (
+          {/* Corps de la feuille : cadre intérieur délicat + toutes les catégories */}
+          <div className="relative px-6 py-9 sm:px-10 sm:py-11">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-2.5 rounded-[1.15rem] border"
+              style={{ borderColor: `${accent}2e` }}
+            />
+            <div className="relative space-y-9">
+              {sections.length === 0 ? (
                 <p className="py-6 text-center text-sm italic text-stone-500">
                   Ce menu est en cours de préparation. Revenez très bientôt !
                 </p>
               ) : (
-                voletMilieu.map((section) => (
+                sections.map((section) => (
                   <MenuSection
                     key={section.category}
                     section={section}
@@ -396,45 +414,30 @@ export default async function PublicMenuPage({ params, searchParams }: PageProps
                 ))
               )}
             </div>
-          </div>
 
-          {/* Volet 3 — catégories suivantes, note et fraîcheur du menu */}
-          <div className="relative flex flex-col border-t border-stone-900/5 px-6 py-8 sm:px-7 md:border-t-0 pli-gauche">
-            <div className="space-y-8">
-              {voletDroit.map((section) => (
-                <MenuSection
-                  key={section.category}
-                  section={section}
-                  accent={accent}
-                  currency={menu.currency}
-                />
-              ))}
-            </div>
-
-            {menu.footerNote && (
-              <div className="mt-9 text-center">
-                <Ornament color={`${accent}99`} />
-                <p className="mt-3 text-xs italic leading-relaxed text-stone-500">
+            <div className="relative mt-11 text-center">
+              <Ornament color={`${accent}99`} />
+              <p
+                className="mt-3.5 text-lg italic"
+                style={{ fontFamily: 'var(--menu-titres)', color: shade(accent, 0.82) }}
+              >
+                Bon appétit !
+              </p>
+              {menu.footerNote && (
+                <p className="mx-auto mt-3.5 max-w-sm text-xs italic leading-relaxed text-stone-500">
                   {menu.footerNote}
                 </p>
-              </div>
-            )}
-
-            <div className="mt-auto pt-8">
-              <p className="flex items-center justify-center gap-2 text-center text-xs font-medium text-stone-400">
-                <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden>
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                </span>
-                Menu toujours à jour — {dateFormatter.format(menu.updatedAt)}
-              </p>
+              )}
             </div>
           </div>
         </article>
 
-        <p className="mx-auto mt-5 flex max-w-lg items-center justify-center gap-1.5 text-xs text-stone-400">
-          <Clock className="h-3.5 w-3.5" aria-hidden />
-          Ce menu en ligne est la version la plus récente du restaurant
+        <p className="mt-5 flex items-center justify-center gap-2 text-xs font-medium text-stone-400">
+          <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden>
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+          </span>
+          Menu toujours à jour — {dateFormatter.format(menu.updatedAt)}
         </p>
       </div>
     </main>

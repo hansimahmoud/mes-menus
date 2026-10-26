@@ -6,6 +6,7 @@ export const dynamic = 'force-dynamic'
 // Génère un slug court et unique à partir du nom du menu.
 // Ce slug ne change JAMAIS ensuite : les QR codes imprimés restent valables.
 async function generateUniqueSlug(name: string): Promise<string> {
+  if (!db) return `menu-${Date.now().toString(36)}`
   const base =
     name
       .normalize('NFD')

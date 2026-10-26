@@ -12,6 +12,7 @@ import {
   Copy,
   ExternalLink,
   Eye,
+  FileSpreadsheet,
   Globe,
   Link2,
   Loader2,
@@ -38,6 +39,8 @@ import {
 } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
+import { ImportExcelDialog } from '@/components/import-excel-dialog'
+import type { ParsedRow } from '@/lib/excel-import'
 
 interface MenuData {
   id: string
@@ -128,6 +131,7 @@ export default function MenuEditorPage() {
   const [saving, setSaving] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [publicUrl, setPublicUrl] = useState('')
+  const [importOpen, setImportOpen] = useState(false)
   const keyCounter = useRef(0)
 
   const nextKey = () => {
@@ -225,6 +229,32 @@ export default function MenuEditorPage() {
     if (!value) return
     setCategories((current) => (current.includes(value) ? current : [...current, value]))
     setNewCategory('')
+  }
+
+  // Insère les articles issus du fichier Excel à la fin de la liste, dans la catégorie choisie
+  const handleImportRows = (category: string, rows: ParsedRow[]) => {
+    const additions = rows.map((row) => ({
+      key: nextKey(),
+      category,
+      name: row.name,
+      description: row.description,
+      price: row.price === null ? '' : priceToInput(row.price),
+    }))
+    setItems((current) => [...current, ...additions])
+    setCategories((current) => (current.includes(category) ? current : [...current, category]))
+    markDirty()
+    if (items.length + additions.length > 200) {
+      toast({
+        title: 'Limite de 200 articles',
+        description: 'Le menu ne peut contenir que 200 articles : les excédents seront ignorés à l\u2019enregistrement.',
+        variant: 'destructive',
+      })
+    } else {
+      toast({
+        title: `${additions.length} article${additions.length > 1 ? 's' : ''} importé${additions.length > 1 ? 's' : ''}`,
+        description: `Ajoutés dans « ${category} ». Vérifiez l'aperçu puis cliquez sur Enregistrer.`,
+      })
+    }
   }
 
   const buildPayload = () => ({
@@ -568,27 +598,43 @@ export default function MenuEditorPage() {
               )
             })}
 
-            {/* Nouvelle catégorie */}
+            {/* Nouvelle catégorie + import Excel */}
             <Card className="border-dashed">
-              <CardContent className="flex flex-wrap items-center gap-2 p-4">
-                <Input
-                  value={newCategory}
-                  onChange={(e) => setNewCategory(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      addCategory()
-                    }
-                  }}
-                  placeholder="Nouvelle catégorie (ex. Entrées, Plats, Desserts, Boissons…)"
-                  className="h-9 min-w-0 flex-1"
-                  maxLength={60}
-                  aria-label="Nom de la nouvelle catégorie"
-                />
-                <Button variant="outline" className="h-9" onClick={addCategory}>
-                  <Plus className="mr-1.5 h-4 w-4" aria-hidden />
-                  Ajouter la catégorie
-                </Button>
+              <CardContent className="space-y-3 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        addCategory()
+                      }
+                    }}
+                    placeholder="Nouvelle catégorie (ex. Entrées, Plats, Desserts, Boissons…)"
+                    className="h-9 min-w-0 flex-1"
+                    maxLength={60}
+                    aria-label="Nom de la nouvelle catégorie"
+                  />
+                  <Button variant="outline" className="h-9" onClick={addCategory}>
+                    <Plus className="mr-1.5 h-4 w-4" aria-hidden />
+                    Ajouter la catégorie
+                  </Button>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-dashed border-stone-200 pt-3">
+                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <FileSpreadsheet className="h-3.5 w-3.5 shrink-0 text-emerald-700" aria-hidden />
+                    Vos plats sont déjà dans un fichier Excel ? Importez-les d'un coup.
+                  </p>
+                  <Button
+                    variant="outline"
+                    className="h-9 border-emerald-700 text-emerald-800 hover:bg-emerald-50 hover:text-emerald-900"
+                    onClick={() => setImportOpen(true)}
+                  >
+                    <FileSpreadsheet className="mr-1.5 h-4 w-4" aria-hidden />
+                    Importer depuis Excel
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -822,6 +868,15 @@ export default function MenuEditorPage() {
       </main>
 
       <SiteFooter />
+
+      {/* Importation Excel / CSV des articles (nom, description, prix) */}
+      <ImportExcelDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        categories={categories}
+        currency={currency}
+        onImport={handleImportRows}
+      />
     </div>
   )
 }
