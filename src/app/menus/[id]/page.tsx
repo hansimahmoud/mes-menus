@@ -14,6 +14,7 @@ import {
   Eye,
   FileSpreadsheet,
   Globe,
+  ImagePlus,
   Link2,
   Loader2,
   Plus,
@@ -53,6 +54,7 @@ interface MenuData {
   fontSize: string
   currency: string
   footerNote: string | null
+  photo: string | null
   updatedAt: string
   items: {
     id: string
@@ -109,6 +111,47 @@ function priceToInput(price: number | null): string {
   return price === null ? '' : price.toFixed(2).replace('.', ',')
 }
 
+// Compresse une photo choisie pour l'arrière-plan de la feuille : 1600 px max, JPEG ~82 %.
+// Évite des data URLs géantes en base tout en gardant une belle résolution d'affichage.
+function compressPhotoFile(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!/^image\/(png|jpe?g|webp)$/i.test(file.type)) {
+      reject(new Error('format'))
+      return
+    }
+    if (file.size > 12 * 1024 * 1024) {
+      reject(new Error('taille'))
+      return
+    }
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      try {
+        const MAX = 1600
+        const scale = Math.min(1, MAX / Math.max(img.width, img.height))
+        const width = Math.max(1, Math.round(img.width * scale))
+        const height = Math.max(1, Math.round(img.height * scale))
+        const canvas = document.createElement('canvas')
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) throw new Error('canvas')
+        ctx.drawImage(img, 0, 0, width, height)
+        resolve(canvas.toDataURL('image/jpeg', 0.82))
+      } catch (error) {
+        reject(error)
+      } finally {
+        URL.revokeObjectURL(url)
+      }
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('lecture'))
+    }
+    img.src = url
+  })
+}
+
 export default function MenuEditorPage() {
   const { toast } = useToast()
   const router = useRouter()
@@ -124,6 +167,7 @@ export default function MenuEditorPage() {
   const [fontSize, setFontSize] = useState('normal')
   const [currency, setCurrency] = useState('€')
   const [footerNote, setFooterNote] = useState('')
+  const [photo, setPhoto] = useState<string | null>(null)
   const [items, setItems] = useState<EditorItem[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [newCategory, setNewCategory] = useState('')
@@ -156,6 +200,7 @@ export default function MenuEditorPage() {
       setFontSize(data.fontSize || 'normal')
       setCurrency(data.currency)
       setFooterNote(data.footerNote ?? '')
+      setPhoto(data.photo ?? null)
       const mapped = data.items.map((item) => ({
         key: nextKey(),
         category: item.category,
@@ -257,6 +302,26 @@ export default function MenuEditorPage() {
     }
   }
 
+  // Photo du restaurant : compression locale puis ajout à l'aperçu (enregistrée au prochain « Enregistrer »)
+  const applyPhotoFile = async (file: File | undefined | null) => {
+    if (!file) return
+    try {
+      const dataUrl = await compressPhotoFile(file)
+      setPhoto(dataUrl)
+      markDirty()
+      toast({
+        title: 'Photo ajoutée',
+        description: 'Enregistrez puis republiez pour l\u2019afficher sur la page publique.',
+      })
+    } catch {
+      toast({
+        title: 'Photo refusée',
+        description: 'Utilisez une image JPG, PNG ou WebP de 12 Mo maximum.',
+        variant: 'destructive',
+      })
+    }
+  }
+
   const buildPayload = () => ({
     name: name.trim() || 'Menu sans nom',
     accentColor,
@@ -264,6 +329,7 @@ export default function MenuEditorPage() {
     fontSize,
     currency: currency.trim() || '€',
     footerNote: footerNote.trim() || null,
+    photo,
     items: items.map((item, index) => ({
       category: item.category,
       name: item.name.trim(),
@@ -776,6 +842,80 @@ export default function MenuEditorPage() {
                     className="min-h-20 text-sm"
                     maxLength={200}
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label>Photo du restaurant (facultatif)</Label>
+                  {photo ? (
+                    <div className="overflow-hidden rounded-xl border border-stone-200">
+                      <div
+                        className="h-28 w-full"
+                        style={{
+                          backgroundImage: `url(${photo})`,
+                          backgroundSize: 'cover',
+                          backgroundPosition: 'center',
+                        }}
+                        role="img"
+                        aria-label="Photo du restaurant choisie pour l'arrière-plan"
+                      />
+                      <div className="flex items-center justify-between gap-2 bg-white p-2">
+                        <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                          Affichée en fond de la feuille de menu.
+                        </p>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <label className="cursor-pointer rounded-md px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50">
+                            Remplacer
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp"
+                              className="sr-only"
+                              onChange={(e) => {
+                                void applyPhotoFile(e.target.files?.[0])
+                                e.target.value = ''
+                              }}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPhoto(null)
+                              markDirty()
+                            }}
+                            className="rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                          >
+                            Retirer
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <label
+                      className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-stone-300 bg-stone-50/60 px-4 py-6 text-center transition-colors hover:border-amber-400 hover:bg-amber-50/50"
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        void applyPhotoFile(e.dataTransfer.files?.[0])
+                      }}
+                    >
+                      <ImagePlus className="h-6 w-6 text-stone-400" aria-hidden />
+                      <span className="text-sm font-medium text-stone-700">Ajouter une photo</span>
+                      <span className="text-xs text-muted-foreground">
+                        Cliquez ou glissez-déposez — JPG, PNG, WebP (12 Mo max)
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="sr-only"
+                        onChange={(e) => {
+                          void applyPhotoFile(e.target.files?.[0])
+                          e.target.value = ''
+                        }}
+                      />
+                    </label>
+                  )}
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    La photo habille le fond de la page publique derrière la feuille de menu. Elle est
+                    automatiquement réduite pour rester légère.
+                  </p>
                 </div>
               </CardContent>
             </Card>

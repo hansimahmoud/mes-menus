@@ -84,6 +84,22 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const footerNote =
       typeof body?.footerNote === 'string' && body.footerNote.trim() ? body.footerNote.trim().slice(0, 200) : null
 
+    // Photo du restaurant en arrière-plan (data URL image, ~3,7 Mo binaires max) — null pour retirer
+    let photo: string | null = null
+    if (body?.photo !== undefined && body?.photo !== null) {
+      const isValidPhoto =
+        typeof body.photo === 'string' &&
+        /^data:image\/(png|jpe?g|webp);base64,[a-z0-9+/=]+$/i.test(body.photo) &&
+        body.photo.length <= 5_000_000
+      if (!isValidPhoto) {
+        return NextResponse.json(
+          { error: 'Photo non prise en charge : utilisez une image JPG, PNG ou WebP.' },
+          { status: 400 }
+        )
+      }
+      photo = body.photo
+    }
+
     const rawItems: IncomingItem[] = Array.isArray(body?.items) ? body.items.slice(0, 200) : []
     const items = rawItems
       .map((item, index) => sanitizeItem(item, index))
@@ -101,7 +117,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       }
       return tx.menu.update({
         where: { id },
-        data: { name, accentColor, fontStyle, fontSize, currency, footerNote },
+        data: { name, accentColor, fontStyle, fontSize, currency, footerNote, photo },
         include: { items: { orderBy: { sortOrder: 'asc' } } },
       })
     })

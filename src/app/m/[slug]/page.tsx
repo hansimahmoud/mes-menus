@@ -64,6 +64,14 @@ function shade(hex: string, factor: number): string {
   return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`
 }
 
+/** Convertit #rrggbb en rgb(r g b / alpha) pour superposer la couleur sur une photo. */
+function withAlpha(hex: string, alpha: number): string {
+  const match = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
+  if (!match) return hex
+  const value = Number.parseInt(match[1], 16)
+  return `rgb(${(value >> 16) & 255} ${(value >> 8) & 255} ${value & 255} / ${alpha})`
+}
+
 const dateFormatter = new Intl.DateTimeFormat('fr-FR', {
   day: 'numeric',
   month: 'long',
@@ -295,24 +303,48 @@ export default async function PublicMenuPage({ params, searchParams }: PageProps
   const styleEcriture = FONT_STYLES[menu.fontStyle] ?? FONT_STYLES.classique
   const tailleTexte = FONT_SIZES[menu.fontSize] ?? FONT_SIZES.normal
   const isDraftPreview = !menu.published
+  const photo = typeof menu.photo === 'string' && menu.photo.startsWith('data:image/') ? menu.photo : null
 
   return (
     <main className="relative min-h-screen bg-[#fdf9f2]">
-      {/* Taches de couleur floues : l'ambiance vivante, sans gêner la lecture */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div
-          className="absolute -left-28 -top-28 h-80 w-80 rounded-full opacity-[0.13] blur-2xl"
-          style={{ backgroundColor: accent }}
-        />
-        <div
-          className="animate-float-soft absolute -right-24 top-1/4 h-64 w-64 rounded-full opacity-10 blur-2xl"
-          style={{ backgroundColor: accent }}
-        />
-        <div
-          className="absolute -left-20 bottom-16 h-56 w-56 rounded-full opacity-[0.07] blur-2xl"
-          style={{ backgroundColor: accent }}
-        />
-      </div>
+      {/* Photo du restaurant en fond (si définie) : floutée, assombrie, la feuille « posée » dessus */}
+      {photo && (
+        <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div
+            className="absolute inset-0 bg-cover bg-center"
+            style={{
+              backgroundImage: `url("${photo}")`,
+              filter: 'blur(5px)',
+              transform: 'scale(1.08)',
+            }}
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                'linear-gradient(180deg, rgb(30 22 14 / 0.5), rgb(30 22 14 / 0.66) 45%, rgb(30 22 14 / 0.74))',
+            }}
+          />
+        </div>
+      )}
+
+      {/* Taches de couleur floues : l'ambiance vivante, sans gêner la lecture (sans photo) */}
+      {!photo && (
+        <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div
+            className="absolute -left-28 -top-28 h-80 w-80 rounded-full opacity-[0.13] blur-2xl"
+            style={{ backgroundColor: accent }}
+          />
+          <div
+            className="animate-float-soft absolute -right-24 top-1/4 h-64 w-64 rounded-full opacity-10 blur-2xl"
+            style={{ backgroundColor: accent }}
+          />
+          <div
+            className="absolute -left-20 bottom-16 h-56 w-56 rounded-full opacity-[0.07] blur-2xl"
+            style={{ backgroundColor: accent }}
+          />
+        </div>
+      )}
 
       <div className="relative mx-auto w-full max-w-xl px-4 pb-14 pt-7 sm:max-w-2xl sm:px-6 sm:pt-10">
         {isDraftPreview && (
@@ -325,7 +357,7 @@ export default async function PublicMenuPage({ params, searchParams }: PageProps
         {/* La feuille de menu : une seule page posée sur la table,
             en-tête réduite et éclatante, corps aéré façon carte imprimée. */}
         <article
-          className="animate-fade-up overflow-hidden rounded-[1.75rem] bg-[#fffdf8] shadow-[0_24px_70px_-24px_rgba(68,50,30,0.28)] ring-1 ring-stone-900/5"
+          className="animate-fade-up overflow-hidden rounded-[1.75rem] bg-[#fffdf8] shadow-[0_30px_80px_-20px_rgba(20,14,6,0.55)] ring-1 ring-stone-900/5"
           style={{
             fontFamily: styleEcriture.texte,
             '--menu-titres': styleEcriture.titres,
@@ -339,12 +371,21 @@ export default async function PublicMenuPage({ params, searchParams }: PageProps
             '--taille-prix': tailleTexte.prix,
           } as CSSProperties}
         >
-          {/* En-tête réduite, en dégradé éclatant avec balayage de lumière */}
+          {/* En-tête réduite, en dégradé éclatant avec balayage de lumière.
+              Avec une photo du restaurant : la photo passe sous le dégradé de l'accent. */}
           <header
             className="relative overflow-hidden px-6 pb-7 pt-7 text-center text-white sm:px-10 sm:pb-8 sm:pt-9"
-            style={{
-              background: `linear-gradient(150deg, ${shade(accent, 1.12)}, ${accent} 55%, ${shade(accent, 0.66)})`,
-            }}
+            style={
+              photo
+                ? {
+                    backgroundImage: `linear-gradient(150deg, ${withAlpha(shade(accent, 1.12), 0.88)}, ${withAlpha(accent, 0.8)} 55%, ${withAlpha(shade(accent, 0.66), 0.9)}), url("${photo}")`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center 32%',
+                  }
+                : {
+                    background: `linear-gradient(150deg, ${shade(accent, 1.12)}, ${accent} 55%, ${shade(accent, 0.66)})`,
+                  }
+            }
           >
             {/* Reflet lumineux en haut à gauche + bulles délicates */}
             <div
@@ -432,7 +473,9 @@ export default async function PublicMenuPage({ params, searchParams }: PageProps
           </div>
         </article>
 
-        <p className="mt-5 flex items-center justify-center gap-2 text-xs font-medium text-stone-400">
+        <p
+          className={`mt-5 flex items-center justify-center gap-2 text-xs font-medium ${photo ? 'text-stone-200 drop-shadow-sm' : 'text-stone-400'}`}
+        >
           <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden>
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
             <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
