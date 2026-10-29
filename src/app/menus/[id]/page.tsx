@@ -23,6 +23,16 @@ import {
   Trash2,
   TriangleAlert,
 } from 'lucide-react'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
 import { Button } from '@/components/ui/button'
@@ -176,6 +186,7 @@ export default function MenuEditorPage() {
   const [publishing, setPublishing] = useState(false)
   const [publicUrl, setPublicUrl] = useState('')
   const [importOpen, setImportOpen] = useState(false)
+  const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null)
   const keyCounter = useRef(0)
 
   const nextKey = () => {
@@ -257,16 +268,55 @@ export default function MenuEditorPage() {
     markDirty()
   }
 
+  // Déplace un article, sans jamais sortir de son bloc de catégorie
   const moveItem = (index: number, direction: -1 | 1) => {
     setItems((current) => {
       const target = index + direction
       if (target < 0 || target >= current.length) return current
+      if (current[target].category !== current[index].category) return current
       const next = [...current]
       const [moved] = next.splice(index, 1)
       next.splice(target, 0, moved)
       return next
     })
     markDirty()
+  }
+
+  // Déplace une catégorie d'un cran : les cartes de l'éditeur ET les articles
+  // suivent le nouvel ordre (la page publique regroupe les sections dans
+  // l'ordre de la liste d'articles, donc tout reste synchronisé après enregistrement).
+  const moveCategory = (category: string, direction: -1 | 1) => {
+    const index = categories.indexOf(category)
+    const target = index + direction
+    if (index === -1 || target < 0 || target >= categories.length) return
+    const nextCategories = [...categories]
+    const [moved] = nextCategories.splice(index, 1)
+    nextCategories.splice(target, 0, moved)
+    setCategories(nextCategories)
+    const rank = new Map(nextCategories.map((c, i) => [c, i]))
+    setItems((current) =>
+      [...current].sort(
+        (a, b) =>
+          (rank.get(a.category) ?? Number.MAX_SAFE_INTEGER) -
+          (rank.get(b.category) ?? Number.MAX_SAFE_INTEGER)
+      )
+    )
+    markDirty()
+  }
+
+  // Suppression confirmée d'une catégorie : retire la catégorie et tous ses articles
+  // (définitif au prochain « Enregistrer », l'API remplace toute la liste)
+  const confirmDeleteCategory = () => {
+    if (!categoryToDelete) return
+    const target = categoryToDelete
+    setItems((current) => current.filter((item) => item.category !== target))
+    setCategories((current) => current.filter((c) => c !== target))
+    setCategoryToDelete(null)
+    markDirty()
+    toast({
+      title: `Catégorie « ${target} » supprimée`,
+      description: 'Cliquez sur Enregistrer pour confirmer la suppression.',
+    })
   }
 
   const addCategory = () => {
@@ -551,28 +601,74 @@ export default function MenuEditorPage() {
       </div>
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6">
-        <div className="grid gap-6 lg:grid-cols-3">
+        {/* grid-cols-1 explicite (minmax(0,1fr)) : empêche la colonne de dépasser l'écran sur mobile */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Colonne principale : catégories et articles */}
           <div className="space-y-5 lg:col-span-2">
-            {categories.map((category) => {
+            {categories.map((category, categoryIndex) => {
               const sectionItems = items
                 .map((item, index) => ({ item, index }))
                 .filter(({ item }) => item.category === category)
               return (
                 <Card key={category}>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                    <CardTitle className="text-lg" style={{ color: accentColor }}>
-                      {category}
-                    </CardTitle>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 text-xs text-amber-700 hover:bg-amber-50 hover:text-amber-800"
-                      onClick={() => addItem(category)}
-                    >
-                      <Plus className="mr-1 h-3.5 w-3.5" aria-hidden />
-                      Ajouter un article
-                    </Button>
+                  <CardHeader className="flex flex-wrap items-center justify-between gap-2 space-y-0 pb-3">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <div
+                        className="flex shrink-0 items-center overflow-hidden rounded-lg border border-stone-200 bg-white"
+                        role="group"
+                        aria-label={`Déplacer la catégorie ${category}`}
+                      >
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 rounded-none"
+                          onClick={() => moveCategory(category, -1)}
+                          disabled={categoryIndex === 0}
+                          aria-label={`Monter la catégorie ${category}`}
+                        >
+                          <ChevronUp className="h-3.5 w-3.5" aria-hidden />
+                        </Button>
+                        <span className="h-4 w-px shrink-0 bg-stone-200" aria-hidden />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 rounded-none"
+                          onClick={() => moveCategory(category, 1)}
+                          disabled={categoryIndex === categories.length - 1}
+                          aria-label={`Descendre la catégorie ${category}`}
+                        >
+                          <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+                        </Button>
+                      </div>
+                      <div className="min-w-0">
+                        <CardTitle className="truncate text-lg" style={{ color: accentColor }}>
+                          {category}
+                        </CardTitle>
+                        <p className="text-xs text-muted-foreground">
+                          {sectionItems.length} article{sectionItems.length > 1 ? 's' : ''}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-xs text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+                        onClick={() => addItem(category)}
+                      >
+                        <Plus className="mr-1 h-3.5 w-3.5" aria-hidden />
+                        Ajouter un article
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700"
+                        onClick={() => setCategoryToDelete(category)}
+                        aria-label={`Supprimer la catégorie ${category}`}
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden />
+                      </Button>
+                    </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     {sectionItems.length === 0 ? (
@@ -605,7 +701,7 @@ export default function MenuEditorPage() {
                                 size="icon"
                                 className="h-8 w-8 text-muted-foreground"
                                 onClick={() => moveItem(index, -1)}
-                                disabled={index === 0}
+                                disabled={index === 0 || items[index - 1]?.category !== item.category}
                                 aria-label="Monter l'article"
                               >
                                 <ChevronUp className="h-4 w-4" aria-hidden />
@@ -615,7 +711,9 @@ export default function MenuEditorPage() {
                                 size="icon"
                                 className="h-8 w-8 text-muted-foreground"
                                 onClick={() => moveItem(index, 1)}
-                                disabled={index === items.length - 1}
+                                disabled={
+                                  index === items.length - 1 || items[index + 1]?.category !== item.category
+                                }
                                 aria-label="Descendre l'article"
                               >
                                 <ChevronDown className="h-4 w-4" aria-hidden />
@@ -1008,6 +1106,34 @@ export default function MenuEditorPage() {
       </main>
 
       <SiteFooter />
+
+      {/* Confirmation de suppression d'une catégorie */}
+      <AlertDialog
+        open={categoryToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setCategoryToDelete(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer la catégorie « {categoryToDelete} » ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {categoryToDelete !== null && items.some((item) => item.category === categoryToDelete)
+                ? `${items.filter((item) => item.category === categoryToDelete).length} article${items.filter((item) => item.category === categoryToDelete).length > 1 ? 's' : ''} de cette catégorie ser${items.filter((item) => item.category === categoryToDelete).length > 1 ? 'ont' : 'a'} retiré${items.filter((item) => item.category === categoryToDelete).length > 1 ? 's' : ''} du menu. Cette action devient définitive après un clic sur « Enregistrer ».`
+                : 'Cette catégorie est vide : elle sera simplement retirée de la liste. La suppression devient définitive après un clic sur « Enregistrer ».'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 text-white hover:bg-red-700"
+              onClick={confirmDeleteCategory}
+            >
+              Supprimer la catégorie
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Importation Excel / CSV des articles (nom, description, prix) */}
       <ImportExcelDialog

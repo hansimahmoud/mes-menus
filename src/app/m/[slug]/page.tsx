@@ -359,6 +359,15 @@ export default async function PublicMenuPage({ params, searchParams }: PageProps
         <article
           className="animate-fade-up overflow-hidden rounded-[1.75rem] bg-[#fffdf8] shadow-[0_30px_80px_-20px_rgba(20,14,6,0.55)] ring-1 ring-stone-900/5"
           style={{
+            // Photo du restaurant en fond de TOUTE la feuille : elle transparaît sous
+            // l'en-tête et le voile ivoire du corps (la lisibilité reste garantie).
+            ...(photo
+              ? {
+                  backgroundImage: `url("${photo}")`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center 30%',
+                }
+              : {}),
             fontFamily: styleEcriture.texte,
             '--menu-titres': styleEcriture.titres,
             '--menu-majuscules': styleEcriture.majuscules,
@@ -432,8 +441,20 @@ export default async function PublicMenuPage({ params, searchParams }: PageProps
             />
           </header>
 
-          {/* Corps de la feuille : cadre intérieur délicat + toutes les catégories */}
+          {/* Corps de la feuille : cadre intérieur délicat + toutes les catégories.
+              Avec photo : voile ivoire dégradé — la photo se devine sur toute la
+              hauteur (plus visible près de l'en-tête) sans gêner la lecture. */}
           <div className="relative px-6 py-9 sm:px-10 sm:py-11">
+            {photo && (
+              <div
+                aria-hidden
+                className="absolute inset-0"
+                style={{
+                  background:
+                    'linear-gradient(180deg, rgb(255 253 248 / 0.72), rgb(255 253 248 / 0.86) 26%, rgb(255 253 248 / 0.93) 72%)',
+                }}
+              />
+            )}
             <div
               aria-hidden
               className="pointer-events-none absolute inset-2.5 rounded-[1.15rem] border"
