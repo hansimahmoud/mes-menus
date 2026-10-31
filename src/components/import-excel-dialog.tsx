@@ -138,8 +138,9 @@ export function ImportExcelDialog({
             Importer depuis Excel
           </DialogTitle>
           <DialogDescription>
-            Formats acceptés : .xlsx, .xls ou .csv — 1ʳᵉ colonne = nom de l'article, 2ᵉ =
-            description, dernière = prix. Les en-têtes de colonnes sont repérés automatiquement.
+            Formats acceptés : .xlsx, .xls ou .csv — 1ʳᵉ colonne = nom de l'article, puis prix et
+            description. Les colonnes prix et description sont repérées automatiquement, quel que
+            soit leur ordre, et les en-têtes sont détectés.
           </DialogDescription>
         </DialogHeader>
 
@@ -242,9 +243,9 @@ export function ImportExcelDialog({
                     <table className="w-full text-sm">
                       <thead className="sticky top-0 bg-stone-50 text-left text-xs uppercase tracking-wide text-muted-foreground">
                         <tr>
-                          <th className="px-3 py-2 font-medium">Nom</th>
-                          <th className="px-3 py-2 font-medium">Description</th>
+                          <th className="px-3 py-2 font-medium">Article</th>
                           <th className="px-3 py-2 text-right font-medium">Prix</th>
+                          <th className="px-3 py-2 font-medium">Description</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -253,13 +254,13 @@ export function ImportExcelDialog({
                             <td className="max-w-36 truncate px-3 py-1.5 font-medium text-stone-900">
                               {row.name}
                             </td>
-                            <td className="max-w-44 truncate px-3 py-1.5 text-muted-foreground">
-                              {row.description || <span className="text-stone-300">—</span>}
-                            </td>
                             <td className="px-3 py-1.5 text-right tabular-nums text-stone-700">
                               {row.price !== null
                                 ? `${row.price.toFixed(2).replace('.', ',')} ${currency}`
                                 : <span className="text-stone-300">—</span>}
+                            </td>
+                            <td className="max-w-44 truncate px-3 py-1.5 text-muted-foreground">
+                              {row.description || <span className="text-stone-300">—</span>}
                             </td>
                           </tr>
                         ))}

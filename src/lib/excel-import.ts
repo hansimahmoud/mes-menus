@@ -5,8 +5,12 @@ import * as XLSX from 'xlsx'
  *
  * Format attendu (tel que décrit par le gérant) :
  *   1ʳᵉ colonne  → nom de l'article
- *   2ᵉ colonne   → description
- *   dernière colonne → prix
+ *   puis         → prix et description, repérés AUTOMATIQUEMENT (ordre quelconque) :
+ *                    1. une en-tête explicite (« prix », « tarif », « price »…) gagne,
+ *                    2. sinon la colonne au contenu le plus chiffré (score > 50 %),
+ *                    3. à défaut, la 2ᵉ colonne est prise comme prix
+ *                       (ordre article / prix / description).
+ *   2 colonnes   → nom / prix.
  *
  * La première ligne d'en-têtes est détectée automatiquement et peut être
  * ignorée manuellement dans le dialogue d'importation.
@@ -49,6 +53,65 @@ const HEADER_KEYWORDS = [
   'price',
   'name',
 ]
+
+// Mots-clés réservés à l'identification de la colonne des prix
+const PRICE_HEADER_KEYWORDS = ['prix', 'tarif', 'montant', 'price', 'eur', '€']
+
+/**
+ * Vrai si la cellule ressemble à un prix isolé : chiffres + séparateurs
+ * (espaces/insécables, milliers) + devise éventuelle. Sert à distinguer la
+ * colonne des prix de celle des descriptions (« 12,50 € » → oui,
+ * « 2 personnes » → non, « Crème légère » → non).
+ */
+function looksLikePrice(raw: string): boolean {
+  const text = raw.trim()
+  if (!text) return false
+  return /^[€$£]?\s*\d+(?:[ \u00a0\u202f.,]\d{3})*(?:[.,]\d{1,2})?\s*(?:eur|euros?|€|\$|£|chf)?$/i.test(
+    text
+  )
+}
+
+/**
+ * Repère l'indice de la colonne des prix parmi les colonnes 1..width-1.
+ * Ordre de priorité : en-tête explicite → contenu le plus chiffré → 2ᵉ colonne.
+ * Renvoie -1 si le tableau n'a qu'une colonne (nom seul).
+ */
+function detectPriceColumn(headerRow: string[] | null, dataRows: string[][]): number {
+  const width = Math.max(0, ...dataRows.map((row) => row.length), headerRow?.length ?? 0)
+  if (width < 2) return -1
+
+  // 1) En-tête explicite : le mot-clé prix est sans ambiguïté
+  if (headerRow) {
+    for (let i = 1; i < Math.min(width, headerRow.length); i += 1) {
+      const header = (headerRow[i] ?? '').trim().toLowerCase()
+      if (header && PRICE_HEADER_KEYWORDS.some((keyword) => header.includes(keyword))) return i
+    }
+  }
+
+  // 2) Contenu le plus « prix » : proportion de cellules chiffre-seul > 50 %
+  //    (égalité → la colonne la plus à gauche gagne, soit prix avant description)
+  let bestIdx = -1
+  let bestScore = 0
+  for (let i = 1; i < width; i += 1) {
+    let hits = 0
+    let total = 0
+    for (const row of dataRows) {
+      const cell = (row[i] ?? '').trim()
+      if (!cell) continue
+      total += 1
+      if (looksLikePrice(cell)) hits += 1
+    }
+    const score = total === 0 ? 0 : hits / total
+    if (score > 0.5 && score > bestScore) {
+      bestScore = score
+      bestIdx = i
+    }
+  }
+  if (bestIdx >= 0) return bestIdx
+
+  // 3) Aucun signal : ordre décrit par le gérant (article / prix / description)
+  return 1
+}
 
 /** Lit le premier onglet du classeur et renvoie les lignes brutes nettoyées. */
 export function readSheet(buffer: ArrayBuffer): SheetContent {
@@ -136,6 +199,10 @@ export function buildItems(sheet: SheetContent, ignoreFirst: boolean): BuildResu
   let skipped = 0
   let priceWarnings = 0
 
+  // Détection de la colonne des prix : une seule fois par fichier
+  const headerRow = ignoreFirst || sheet.headerAuto ? (sheet.rows[0] ?? null) : null
+  const priceIdx = width >= 3 ? Math.max(1, detectPriceColumn(headerRow, dataRows)) : -1
+
   for (const cells of dataRows) {
     const name = (cells[0] ?? '').trim()
     if (!name) {
@@ -146,18 +213,16 @@ export function buildItems(sheet: SheetContent, ignoreFirst: boolean): BuildResu
     let description = ''
     let price: number | null = null
 
-    if (width >= 3) {
-      // Nom / Description / … / Prix (dernière colonne non vide à partir de la 3ᵉ)
-      description = (cells[1] ?? '').trim()
-      let lastIdx = -1
-      for (let i = 2; i < cells.length; i += 1) {
-        if ((cells[i] ?? '').trim() !== '') lastIdx = i
-      }
-      if (lastIdx >= 2) {
-        const parsed = parseFlexiblePrice(cells[lastIdx])
-        price = parsed.value
-        if (parsed.warning) priceWarnings += 1
-      }
+    if (width >= 3 && priceIdx >= 1) {
+      // Nom / … / prix (colonne détectée) / description (autres cellules jointes)
+      const parsed = parseFlexiblePrice(cells[priceIdx] ?? '')
+      price = parsed.value
+      if (parsed.warning) priceWarnings += 1
+      description = cells
+        .filter((_, i) => i !== 0 && i !== priceIdx)
+        .map((cell) => (cell ?? '').trim())
+        .filter(Boolean)
+        .join(' — ')
     } else if (width === 2) {
       // Nom / Prix (pas de description)
       const parsed = parseFlexiblePrice(cells[1] ?? '')
