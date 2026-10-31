@@ -9,9 +9,18 @@ const globalForPrisma = globalThis as unknown as {
 // l'application reste pleinement fonctionnelle : seule la sauvegarde
 // de l'historique est désactivée (réponse 503 propre de l'API).
 export const db: PrismaClient | null = (() => {
-  if (!process.env.DATABASE_URL) return null
+  const url = process.env.DATABASE_URL || 'file:./dev.db'
   try {
-    return globalForPrisma.prisma ?? new PrismaClient()
+    return (
+      globalForPrisma.prisma ??
+      new PrismaClient({
+        datasources: {
+          db: {
+            url,
+          },
+        },
+      })
+    )
   } catch (error) {
     console.error('Initialisation de Prisma impossible :', error)
     return null

@@ -1,0 +1,6 @@
+{
+  "name": "Mes menus & QR codes",
+  "description": "Créez vos menus, publiez-les en ligne et générez le QR code qui y mène : simple, vivant et toujours à jour.",
+  "permissions": [],
+  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
